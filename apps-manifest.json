@@ -1,0 +1,72 @@
+{
+  "apps": {
+    "nomachine": {
+      "name": "NoMachine",
+      "currentVersion": "9.7.3",
+      "versions": {
+        "9.7.3": {
+          "ubuntu": {
+            "20.04+": {
+              "amd64": {
+                "packageType": "deb",
+                "downloadUrl": "https://web9001.nomachine.com/download/9.7/Linux/nomachine_9.7.3_1_amd64.deb"
+              },
+              "arm64": {
+                "packageType": "deb",
+                "downloadUrl": "https://web9001.nomachine.com/download/9.7/Linux/nomachine_9.7.3_1_arm64.deb"
+              }
+            }
+          },
+          "debian": {
+            "11+": {
+              "amd64": {
+                "packageType": "deb",
+                "downloadUrl": "https://web9001.nomachine.com/download/9.7/Linux/nomachine_9.7.3_1_amd64.deb"
+              },
+              "arm64": {
+                "packageType": "deb",
+                "downloadUrl": "https://web9001.nomachine.com/download/9.7/Linux/nomachine_9.7.3_1_arm64.deb"
+              }
+            }
+          },
+          "rhel": {
+            "8+": {
+              "x86_64": {
+                "packageType": "rpm",
+                "downloadUrl": "https://web9001.nomachine.com/download/9.7/Linux/nomachine_9.7.3_1_x86_64.rpm"
+              },
+              "aarch64": {
+                "packageType": "rpm",
+                "downloadUrl": "https://web9001.nomachine.com/download/9.7/Linux/nomachine_9.7.3_1_aarch64.rpm"
+              }
+            }
+          },
+          "rocky": {
+            "8+": {
+              "x86_64": {
+                "packageType": "rpm",
+                "downloadUrl": "https://web9001.nomachine.com/download/9.7/Linux/nomachine_9.7.3_1_x86_64.rpm"
+              },
+              "aarch64": {
+                "packageType": "rpm",
+                "downloadUrl": "https://web9001.nomachine.com/download/9.7/Linux/nomachine_9.7.3_1_aarch64.rpm"
+              }
+            }
+          },
+          "almalinux": {
+            "8+": {
+              "x86_64": {
+                "packageType": "rpm",
+                "downloadUrl": "https://web9001.nomachine.com/download/9.7/Linux/nomachine_9.7.3_1_x86_64.rpm"
+              },
+              "aarch64": {
+                "packageType": "rpm",
+                "downloadUrl": "https://web9001.nomachine.com/download/9.7/Linux/nomachine_9.7.3_1_aarch64.rpm"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
