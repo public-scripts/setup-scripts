@@ -1,95 +1,178 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-set -e
+set -euo pipefail
 
-NOMACHINE_URL="https://web9001.nomachine.com/download/9.7/Linux/nomachine_9.7.3_1_amd64.deb"
-PACKAGE_NAME="nomachine_9.7.3_1_amd64.deb"
-TMP_DIR="/tmp"
-PACKAGE_FILE="${TMP_DIR}/${PACKAGE_NAME}"
+MANIFEST_URL="https://public-scripts.github.io/setup-scripts/apps-manifest.json"
+APP_ID="nomachine"
 
-echo "======================================"
-echo " NoMachine Installer / Upgrader"
-echo "======================================"
+TMP_MANIFEST="/tmp/apps-manifest.json"
 
-# Check root
-if [[ $EUID -ne 0 ]]; then
-    echo "Please run as root or with sudo."
-    exit 1
-fi
+#######################################
+# Detect OS
+#######################################
+detect_os() {
+    source /etc/os-release
 
-# Function: Download package
-download_package() {
-    echo ""
-    echo "Downloading NoMachine package..."
-    wget -O "${PACKAGE_FILE}" "${NOMACHINE_URL}"
+    case "$ID" in
+        ubuntu)
+            OS="ubuntu"
+            ;;
+        debian)
+            OS="debian"
+            ;;
+        rhel|centos)
+            OS="rhel"
+            ;;
+        rocky)
+            OS="rocky"
+            ;;
+        almalinux)
+            OS="almalinux"
+            ;;
+        *)
+            echo "Unsupported OS: $ID"
+            exit 1
+            ;;
+    esac
 
-    if [[ ! -f "${PACKAGE_FILE}" ]]; then
-        echo "Download failed."
+    OS_VERSION="${VERSION_ID}"
+}
+
+#######################################
+# Detect Architecture
+#######################################
+detect_arch() {
+    ARCH_RAW=$(uname -m)
+
+    case "$ARCH_RAW" in
+        x86_64)
+            if [[ "$OS" == "ubuntu" || "$OS" == "debian" ]]; then
+                ARCH="amd64"
+            else
+                ARCH="x86_64"
+            fi
+            ;;
+        aarch64|arm64)
+            if [[ "$OS" == "ubuntu" || "$OS" == "debian" ]]; then
+                ARCH="arm64"
+            else
+                ARCH="aarch64"
+            fi
+            ;;
+        *)
+            echo "Unsupported architecture: $ARCH_RAW"
+            exit 1
+            ;;
+    esac
+}
+
+#######################################
+# Download Manifest
+#######################################
+download_manifest() {
+    echo "Downloading manifest..."
+    curl -fsSL "$MANIFEST_URL" -o "$TMP_MANIFEST"
+}
+
+#######################################
+# Get Latest Version
+#######################################
+load_manifest_data() {
+
+    LATEST_VERSION=$(jq -r \
+        ".apps.${APP_ID}.currentVersion" \
+        "$TMP_MANIFEST")
+
+    DOWNLOAD_URL=$(jq -r \
+        ".apps.${APP_ID}.versions.\"${LATEST_VERSION}\".\"${OS}\" | to_entries[0].value.\"${ARCH}\".downloadUrl" \
+        "$TMP_MANIFEST")
+
+    PACKAGE_TYPE=$(jq -r \
+        ".apps.${APP_ID}.versions.\"${LATEST_VERSION}\".\"${OS}\" | to_entries[0].value.\"${ARCH}\".packageType" \
+        "$TMP_MANIFEST")
+
+    if [[ "$DOWNLOAD_URL" == "null" ]]; then
+        echo "No package found for:"
+        echo "OS=$OS ARCH=$ARCH"
         exit 1
     fi
 }
 
-# Function: Install/Upgrade
-install_nomachine() {
-    echo ""
-    echo "Installing/Upgrading NoMachine..."
+#######################################
+# Installed Version
+#######################################
+get_installed_version() {
 
-    dpkg -i "${PACKAGE_FILE}"
-
-    # Fix dependencies if required
-    apt-get install -f -y
-
-    echo ""
-    echo "Restarting NoMachine..."
-    /etc/NX/nxserver --restart || true
-
-    echo ""
-    echo "Installed Version:"
-    /usr/NX/bin/nxserver --version || true
-
-    echo ""
-    echo "Service Status:"
-    /etc/NX/nxserver --status || true
+    if [[ -x /usr/NX/bin/nxserver ]]; then
+        INSTALLED_VERSION=$(
+            /usr/NX/bin/nxserver --version 2>/dev/null |
+            grep -oE '[0-9]+\.[0-9]+\.[0-9]+' |
+            head -1
+        )
+    else
+        INSTALLED_VERSION=""
+    fi
 }
 
-# Check if NoMachine is installed
-if command -v nxserver >/dev/null 2>&1 || [[ -d /usr/NX ]]; then
+#######################################
+# Install Package
+#######################################
+install_package() {
 
-    echo ""
-    echo "NoMachine is already installed."
+    PKG="/tmp/nomachine.${PACKAGE_TYPE}"
 
-    CURRENT_VERSION=$(/usr/NX/bin/nxserver --version 2>/dev/null | head -n1)
+    echo "Downloading package..."
+    curl -L "$DOWNLOAD_URL" -o "$PKG"
 
-    if [[ -n "$CURRENT_VERSION" ]]; then
-        echo "Current Version: $CURRENT_VERSION"
+    case "$PACKAGE_TYPE" in
+        deb)
+            dpkg -i "$PKG" || apt-get install -f -y
+            ;;
+        rpm)
+            rpm -Uvh "$PKG"
+            ;;
+        *)
+            echo "Unsupported package type: $PACKAGE_TYPE"
+            exit 1
+            ;;
+    esac
+
+    if [[ -x /etc/NX/nxserver ]]; then
+        /etc/NX/nxserver --restart || true
+    fi
+}
+
+#######################################
+# Main
+#######################################
+
+detect_os
+detect_arch
+download_manifest
+load_manifest_data
+get_installed_version
+
+echo "OS               : $OS"
+echo "Architecture     : $ARCH"
+echo "Latest Version   : $LATEST_VERSION"
+echo "Installed Version: ${INSTALLED_VERSION:-Not Installed}"
+
+if [[ -z "${INSTALLED_VERSION}" ]]; then
+
+    read -rp "NoMachine not installed. Install? (y/N): " ANSWER
+
+    if [[ "$ANSWER" =~ ^[Yy]$ ]]; then
+        install_package
     fi
 
-    echo ""
-    read -p "Do you want to upgrade to v9.7.3? (y/N): " UPGRADE
+elif [[ "$INSTALLED_VERSION" != "$LATEST_VERSION" ]]; then
 
-    if [[ "$UPGRADE" =~ ^[Yy]$ ]]; then
-        download_package
-        install_nomachine
-    else
-        echo "Upgrade cancelled."
-        exit 0
+    read -rp "Upgrade NoMachine $INSTALLED_VERSION -> $LATEST_VERSION ? (y/N): " ANSWER
+
+    if [[ "$ANSWER" =~ ^[Yy]$ ]]; then
+        install_package
     fi
 
 else
-
-    echo ""
-    echo "NoMachine is not installed."
-    read -p "Install NoMachine v9.7.3? (y/N): " INSTALL
-
-    if [[ "$INSTALL" =~ ^[Yy]$ ]]; then
-        download_package
-        install_nomachine
-    else
-        echo "Installation cancelled."
-        exit 0
-    fi
-
+    echo "NoMachine is already up-to-date."
 fi
-
-echo ""
-echo "Done."
